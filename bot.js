@@ -91,13 +91,49 @@ bot.onText(/\/verpuntos ([\S]+)/, async (msg, match) => {
 // Comando para ver el ranking
 bot.onText(/\/top/, (msg) => {
     const chatId = msg.chat.id;
+    const { pageContent, totalPages } = getRankingPage(1);
+
+    bot.sendMessage(chatId, `🏆 Ranking de puntos (Página 1/${totalPages}):\n${pageContent}`, {
+        reply_markup: {
+            inline_keyboard: totalPages > 1 ? [[{ text: 'Siguiente ➡', callback_data: 'top_2' }]] : []
+        }
+    });
+});
+
+function getRankingPage(page = 1, pageSize = 100) {
     const ranking = Object.entries(points)
         .sort((a, b) => b[1] - a[1])
-        .map(([user, pts], index) => `${index + 1}. ${user} - ${pts} puntos`)
-        .join('\n');
-    
-    bot.sendMessage(chatId, `🏆 Ranking de puntos:\n${ranking || 'Aún no hay jugadores con puntos.'}`);
+        .map(([user, pts], index) => `${index + 1}. ${user} - ${pts} puntos`);
+
+    const totalPages = Math.ceil(ranking.length / pageSize);
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const pageContent = ranking.slice(start, end).join('\n') || 'No hay jugadores con puntos.';
+
+    return { pageContent, totalPages };
+}
+
+bot.on('callback_query', (query) => {
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const data = query.data;
+
+    if (data.startsWith('top_')) {
+        const page = parseInt(data.split('_')[1]);
+        const { pageContent, totalPages } = getRankingPage(page);
+
+        const buttons = [];
+        if (page > 1) buttons.push({ text: '⬅ Anterior', callback_data: `top_${page - 1}` });
+        if (page < totalPages) buttons.push({ text: 'Siguiente ➡', callback_data: `top_${page + 1}` });
+
+        bot.editMessageText(`🏆 Ranking de puntos (Página ${page}/${totalPages}):\n${pageContent}`, {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: { inline_keyboard: [buttons] }
+        });
+    }
 });
+
 
 // Comando para limpiar toda la lista
 bot.onText(/\/limpiar/, (msg) => {
